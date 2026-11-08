@@ -1,0 +1,5 @@
+# Dépendances d'exécution, versions exactes (ENF07).
+pypdf==6.17.0
+cryptography==50.0.1
+pydantic==2.13.5
+PyYAML==6.0.3

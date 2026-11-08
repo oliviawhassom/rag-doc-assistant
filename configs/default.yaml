@@ -1,0 +1,27 @@
+# Configuration d'exécution. Tous les réglages vivent ici, pas dans le code (ENF15).
+# Une clé inconnue fait échouer le chargement : une faute de frappe ne passe pas en silence.
+version: "v0.1"
+
+stockage:
+  # Relatif au dossier depuis lequel la commande est lancée.
+  dossier: store
+
+ingestion:
+  extensions_acceptees: [".pdf", ".txt", ".md"]
+  taille_max_mo: 50              # 1 Mo = 1 048 576 octets
+  # En dessous de ce nombre moyen de caractères par page (après nettoyage),
+  # un PDF est considéré sans couche texte (numérisé) et rejeté.
+  min_caracteres_par_page: 20
+
+  nettoyage:
+    entetes_pieds: true          # retirer les lignes répétées en haut/bas de page (PDF)
+    lignes_bord: 2               # nb de lignes non vides examinées en haut et en bas de chaque page
+    seuil_repetition: 0.5        # part minimale des pages où la ligne doit revenir
+    min_pages_detection: 3       # en dessous, on ne cherche pas d'en-têtes répétés
+    cesures: true                # recoller « infor-\nmation » (PDF uniquement)
+    markdown_hugo: true          # nettoyer front matter et shortcodes Hugo (docs Kubernetes)
+    variables_hugo:              # valeurs des {{< skew … >}} / {{< param … >}}
+      currentVersion: "1.35"
+      latestVersion: "1.35"
+      currentPatchVersion: "1.35.0"
+      version: "v1.35"

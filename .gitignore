@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets (ENF09) : .env et toutes ses variantes ; seul le modèle .env.example est versionné
+.env
+.env.*
+!.env.example
+
+# Corpus téléchargé : reconstruit par scripts/download_corpus.py, jamais dans le dépôt
+data/raw/
+data/corpus/
+
+# Données produites : documents, pages, passages et index (FAISS) vivent dans store/
+store/
+# Filet de sécurité si un index est écrit ailleurs par erreur
+*.faiss
+
+# Système et éditeurs
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
