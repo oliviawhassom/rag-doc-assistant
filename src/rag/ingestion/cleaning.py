@@ -28,6 +28,17 @@ import yaml
 from rag.config import NettoyageConfig
 from rag.ingestion.validation import Format
 
+# À incrémenter à chaque changement du code qui modifie le texte nettoyé. Un
+# document nettoyé par une version antérieure est retraité au prochain import
+# (sinon, ayant la même empreinte, il serait vu comme un doublon et garderait
+# l'ancien texte). Historique :
+#   1 — version initiale du module 1
+#   2 — titres : « ## ## What's next » et ancres {#...} corrigés ;
+#       glossary_tooltip sans attribut text rendu par son term_id
+#   3 — code placé dans {{< tab codelang=… >}} ou {{< highlight … >}} converti en
+#       bloc de code (ses commentaires « # … » étaient lus comme des titres)
+VERSION_NETTOYAGE = 3
+
 # --------------------------------------------------------------------------- #
 # 1. Caractères
 # --------------------------------------------------------------------------- #
@@ -66,6 +77,13 @@ _FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 _COMMENTAIRE_HTML = re.compile(r"<!--.*?-->", re.DOTALL)
 _MERMAID = re.compile(r"\{\{<\s*mermaid\s*>\}\}.*?\{\{<\s*/\s*mermaid\s*>\}\}", re.DOTALL)
 # « {{< note >}} », « {{</ note >}} », « {{% heading "x" %}} »…
+# Code dans un shortcode : Hugo le met en forme comme du code, mais une fois le
+# shortcode retiré il deviendrait du texte nu, et un commentaire YAML ou shell
+# « # … » serait pris pour un titre. On le convertit en vrai bloc de code.
+_TAB_CODE = re.compile(r"\{\{<\s*tab\s+([^>]*?)>\}\}(.*?)\{\{<\s*/\s*tab\s*>\}\}", re.DOTALL)
+_HIGHLIGHT = re.compile(
+    r"\{\{<\s*highlight\s+([\w-]+)([^>]*?)>\}\}(.*?)\{\{<\s*/\s*highlight\s*>\}\}", re.DOTALL
+)
 _SHORTCODE = re.compile(r"\{\{[<%]\s*(/?)\s*([\w-]+)(.*?)\s*[>%]\}\}", re.DOTALL)
 _ATTRIBUT = re.compile(r'([\w-]+)\s*=\s*"([^"]*)"')
 _ARGUMENT_SEUL = re.compile(r'"([^"]*)"|(\S+)')
@@ -98,13 +116,34 @@ def _premier_argument(arguments: str) -> str:
     return m.group(1) if m.group(1) is not None else m.group(2)
 
 
+def _bloc_code(langage: str, contenu: str) -> str:
+    return f"\n```{langage}\n{contenu.strip(chr(10))}\n```\n"
+
+
+def _remplacer_tab_code(m: re.Match[str]) -> str:
+    attrs = _attributs(m.group(1))
+    if "codelang" not in attrs:
+        return m.group(0)  # onglet de prose : traité par la règle générale
+    titre = f"{attrs['name']}:" if "name" in attrs else ""
+    return titre + _bloc_code(attrs["codelang"], m.group(2))
+
+
+def _remplacer_highlight(m: re.Match[str]) -> str:
+    langage, options, contenu = m.group(1), m.group(2), m.group(3)
+    if "hl_inline=true" in options:
+        return f"`{contenu.strip()}`"
+    return _bloc_code(langage, contenu)
+
+
 def _remplacer_shortcode(m: re.Match[str], variables: dict[str, str]) -> str:
     fermant, nom, arguments = m.group(1), m.group(2), m.group(3)
     if fermant:
         return ""
     attrs = _attributs(arguments)
     if nom == "glossary_tooltip":
-        return attrs.get("text", "")
+        # Sans « text », Hugo affiche le nom du terme ; son term_id (« pod »,
+        # « service-account ») en est la meilleure approximation disponible.
+        return attrs.get("text") or attrs.get("term_id", "")
     if nom in _ENCADRES:
         return _ENCADRES[nom]
     if nom == "feature-state":
@@ -150,6 +189,8 @@ def clean_hugo_markdown(texte: str, variables: dict[str, str] | None = None) -> 
 
     texte = _COMMENTAIRE_HTML.sub("", texte)
     texte = _MERMAID.sub("", texte)
+    texte = _TAB_CODE.sub(_remplacer_tab_code, texte)
+    texte = _HIGHLIGHT.sub(_remplacer_highlight, texte)
     texte = _SHORTCODE.sub(lambda mm: _remplacer_shortcode(mm, variables), texte)
     # Le reste ne s'applique pas dans les blocs de code ```...``` : un exemple
     # HTML ou une sortie « <none> » de kubectl y sont du vrai contenu.

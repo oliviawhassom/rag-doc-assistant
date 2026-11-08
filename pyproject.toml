@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 # Les versions exactes sont figées dans requirements.txt (ENF07).
-dependencies = ["pypdf", "cryptography", "pydantic", "PyYAML"]
+dependencies = ["pypdf", "cryptography", "pydantic", "PyYAML", "tokenizers", "huggingface_hub"]
 
 [project.scripts]
 rag = "rag.cli:main"

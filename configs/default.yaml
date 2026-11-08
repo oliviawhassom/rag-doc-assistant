@@ -25,3 +25,20 @@ ingestion:
       latestVersion: "1.35"
       currentPatchVersion: "1.35.0"
       version: "v1.35"
+
+decoupage:
+  # « taille_fixe » : fenêtres de N tokens avec chevauchement.
+  # « titres » : paragraphes regroupés jusqu'à N tokens, coupes entre paragraphes.
+  # Dans les deux cas, un passage ne franchit jamais une frontière de section (D5).
+  strategie: taille_fixe
+  taille: 256                    # en tokens ; 256 = taille de comparaison des modèles (D4)
+  chevauchement: 32              # en tokens, taille fixe seulement
+  tokenizer:
+    # Tokenizer XLM-RoBERTa, partagé par bge-m3 et multilingual-e5 (D4).
+    modele: BAAI/bge-m3
+    # Hash du commit Hugging Face. « main » = non figé : au premier lancement,
+    # la révision téléchargée est affichée ; la recopier ici (reproductibilité).
+    revision: main
+  sections_exclues:              # avec leurs sous-sections (D7)
+    - "What's next"
+  contexte_section: true         # chemin de section en tête du texte encodé (D5)

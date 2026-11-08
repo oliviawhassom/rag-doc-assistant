@@ -66,12 +66,9 @@ class DocumentStore:
     def list_documents(self) -> list[Document]:
         return sorted(self._par_id.values(), key=lambda d: d.nom_fichier)
 
-    def add(self, doc: Document, pages: list[Page]) -> None:
-        if doc.empreinte in self._par_empreinte:
-            raise ValueError(f"Document déjà présent : {doc.document_id}")
+    def _ecrire_pages(self, doc: Document, pages: list[Page]) -> None:
         if len(pages) != doc.nb_pages:
             raise ValueError("Le nombre de pages ne correspond pas à nb_pages")
-
         self.dossier_pages.mkdir(parents=True, exist_ok=True)
         cible = self.dossier_pages / f"{doc.document_id}.jsonl"
         temporaire = cible.with_suffix(".jsonl.tmp")
@@ -80,11 +77,28 @@ class DocumentStore:
                 f.write(page.model_dump_json() + "\n")
         os.replace(temporaire, cible)  # renommage atomique
 
+    def add(self, doc: Document, pages: list[Page]) -> None:
+        if doc.empreinte in self._par_empreinte:
+            raise ValueError(f"Document déjà présent : {doc.document_id}")
+        self._ecrire_pages(doc, pages)
         with self.chemin_registre.open("a", encoding="utf-8") as f:
             f.write(doc.model_dump_json() + "\n")
             f.flush()
             os.fsync(f.fileno())
         self._indexer(doc)
+
+    def replace(self, doc: Document, pages: list[Page]) -> None:
+        """Remplace les pages et l'entrée d'un document déjà présent (même empreinte),
+        par exemple après un changement de version du nettoyage."""
+        if doc.empreinte not in self._par_empreinte:
+            raise ValueError(f"Document absent : {doc.document_id}")
+        self._ecrire_pages(doc, pages)
+        self._indexer(doc)
+        temporaire = self.chemin_registre.with_suffix(".jsonl.tmp")
+        with temporaire.open("w", encoding="utf-8") as f:
+            for d in sorted(self._par_id.values(), key=lambda d: d.date_ingestion):
+                f.write(d.model_dump_json() + "\n")
+        os.replace(temporaire, self.chemin_registre)
 
     def load_pages(self, document_id: str) -> list[Page]:
         chemin = self.dossier_pages / f"{document_id}.jsonl"

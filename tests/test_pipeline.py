@@ -8,6 +8,7 @@ import pytest
 from reportlab.lib.pdfencrypt import StandardEncryption
 
 from rag.config import Config
+from rag.ingestion.cleaning import VERSION_NETTOYAGE
 from rag.ingestion.extractors import AVERTISSEMENT_PDF_CHIFFRE
 from rag.ingestion.pipeline import LICENCE_INCONNUE, ingest_file, ingest_path
 from rag.ingestion.store import DocumentStore
@@ -206,3 +207,54 @@ def test_ef03_pdf_mot_de_passe_ouverture_rejete(
     assert r.code_erreur == "pdf_mot_de_passe_requis"
     assert "mot de passe d'ouverture" in r.message
     assert store.list_documents() == []
+
+
+# --- Version du nettoyage -----------------------------------------------------------
+
+
+def test_document_nettoye_par_une_ancienne_version_retraite(
+    tmp_path: Path, config: Config, store: DocumentStore
+) -> None:
+    """Un changement du nettoyage s'applique aux documents déjà importés : même
+    empreinte, mais version antérieure → retraité, même identifiant, pages remplacées."""
+    f = tmp_path / "a.md"
+    f.write_text('# A\n\nUn {{< glossary_tooltip term_id="pod" >}} tourne.', encoding="utf-8")
+    premier = ingest_file(f, config, store)
+    assert premier.document is not None
+    doc_id = premier.document.document_id
+
+    # Simule un registre écrit par la version 1 du nettoyage, avec l'ancien texte.
+    registre = config.stockage.dossier / "documents.jsonl"
+    ancien = json.loads(registre.read_text(encoding="utf-8"))
+    ancien["version_nettoyage"] = 1
+    registre.write_text(json.dumps(ancien) + "\n", encoding="utf-8")
+    pages = config.stockage.dossier / "pages" / f"{doc_id}.jsonl"
+    pages.write_text(json.dumps({"document_id": doc_id, "page": 1, "texte": "Un  tourne."}) + "\n")
+
+    store_relu = DocumentStore(config.stockage.dossier)
+    r = ingest_file(f, config, store_relu)
+
+    assert r.statut == "mis_a_jour"
+    assert f"v1 → v{VERSION_NETTOYAGE}" in r.message
+    assert r.document is not None and r.document.document_id == doc_id
+    assert store_relu.load_pages(doc_id)[0].texte.endswith("Un pod tourne.")
+    relu = DocumentStore(config.stockage.dossier)
+    assert len(relu.list_documents()) == 1
+    assert relu.list_documents()[0].version_nettoyage == VERSION_NETTOYAGE
+
+
+def test_registre_sans_version_lu_comme_version_1(tmp_path: Path, config: Config) -> None:
+    """Registre écrit avant l'ajout du champ (module 1) : relu sans erreur, version 1."""
+    store = DocumentStore(config.stockage.dossier)
+    f = tmp_path / "a.txt"
+    f.write_text("contenu", encoding="utf-8")
+    ingest_file(f, config, store)
+    registre = config.stockage.dossier / "documents.jsonl"
+    entree = json.loads(registre.read_text(encoding="utf-8"))
+    del entree["version_nettoyage"]
+    registre.write_text(json.dumps(entree) + "\n", encoding="utf-8")
+
+    relu = DocumentStore(config.stockage.dossier)
+    assert relu.list_documents()[0].version_nettoyage == 1
+    assert ingest_file(f, config, relu).statut == "mis_a_jour"
+    assert ingest_file(f, config, relu).statut == "doublon"

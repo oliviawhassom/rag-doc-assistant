@@ -14,7 +14,9 @@ import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.pdfencrypt import StandardEncryption
 from reportlab.pdfgen import canvas
+from tokenizers import Tokenizer, models, pre_tokenizers
 
+from rag.chunking.tokenizer import TokenizerTexte
 from rag.config import Config, IngestionConfig, StockageConfig
 from rag.ingestion.store import DocumentStore
 
@@ -97,3 +99,22 @@ def config(tmp_path: Path) -> Config:
 @pytest.fixture
 def store(config: Config) -> DocumentStore:
     return DocumentStore(config.stockage.dossier)
+
+
+def creer_tokenizer_factice() -> TokenizerTexte:
+    """Vrai ``tokenizers.Tokenizer`` au vocabulaire vide : chaque mot et chaque signe
+    de ponctuation est un token. Même interface que le tokenizer XLM-RoBERTa,
+    sans téléchargement ; les comptes sont faciles à vérifier à la main."""
+    t = Tokenizer(models.WordLevel({"[UNK]": 0}, unk_token="[UNK]"))
+    t.pre_tokenizer = pre_tokenizers.Whitespace()
+    return TokenizerTexte(t, "factice", "0" * 40)
+
+
+@pytest.fixture
+def tok() -> TokenizerTexte:
+    return creer_tokenizer_factice()
+
+
+def mots(n: int, prefixe: str = "m") -> str:
+    """n mots distincts (donc n tokens pour le tokenizer factice)."""
+    return " ".join(f"{prefixe}{i}" for i in range(n))

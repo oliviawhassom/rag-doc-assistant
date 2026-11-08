@@ -6,16 +6,19 @@ provoque une erreur au lieu d'être ignorée, ce qui protège la reproductibilit
 Les modèles sont figés (``frozen=True``) : une configuration ne change pas en
 cours d'exécution.
 
-Les sections des modules suivants (découpage, embeddings, recherche...) seront
-ajoutées ici au fur et à mesure.
+Les sections des modules suivants (embeddings, recherche...) seront ajoutées
+ici au fur et à mesure.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -52,6 +55,51 @@ class IngestionConfig(_StrictModel):
         return int(self.taille_max_mo * 1024 * 1024)
 
 
+class TokenizerConfig(_StrictModel):
+    """Tokenizer qui définit ce qu'est « un token » pour les tailles de passages (D4).
+
+    ``revision`` : hash du commit Hugging Face. « main » est accepté pour un premier
+    lancement, avec un avertissement : la révision réellement téléchargée est alors
+    relevée dans les métadonnées du découpage, pour être recopiée ici.
+    """
+
+    modele: str = "BAAI/bge-m3"
+    revision: str = "main"
+
+
+class DecoupageConfig(_StrictModel):
+    strategie: Literal["taille_fixe", "titres"] = "taille_fixe"
+    taille: int = Field(default=256, ge=16, le=8192, description="en tokens")
+    chevauchement: int = Field(default=32, ge=0, description="en tokens (taille fixe)")
+    tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)
+    # Sections exclues du découpage, avec leurs sous-sections. Comparaison
+    # insensible à la casse et aux variantes d'apostrophe.
+    sections_exclues: tuple[str, ...] = ("What's next",)
+    # Préfixer le texte encodé de chaque passage par son chemin de section (D2).
+    contexte_section: bool = True
+
+    @model_validator(mode="after")
+    def _chevauchement_coherent(self) -> DecoupageConfig:
+        if self.chevauchement * 2 > self.taille:
+            raise ValueError(
+                f"chevauchement ({self.chevauchement}) supérieur à la moitié de la taille "
+                f"({self.taille}) : chaque token serait encodé plus de deux fois"
+            )
+        return self
+
+    @property
+    def identifiant(self) -> str:
+        """Valeur du champ ``config_decoupage`` des passages.
+
+        Lisible (stratégie, taille, chevauchement) et suffixée d'une empreinte de
+        toute la section : deux réglages différents ne partagent jamais de passages.
+        """
+        empreinte = hashlib.sha256(
+            json.dumps(self.model_dump(mode="json"), sort_keys=True).encode()
+        ).hexdigest()[:8]
+        return f"{self.strategie}-{self.taille}-{self.chevauchement}-{empreinte}"
+
+
 class StockageConfig(_StrictModel):
     dossier: Path = Path("store")
 
@@ -60,6 +108,7 @@ class Config(_StrictModel):
     version: str
     stockage: StockageConfig = Field(default_factory=StockageConfig)
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
+    decoupage: DecoupageConfig = Field(default_factory=DecoupageConfig)
 
 
 def load_config(chemin: Path) -> Config:

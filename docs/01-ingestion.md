@@ -68,6 +68,22 @@ Récupère par `git sparse-checkout` uniquement `content/en/docs/concepts/` (cor
 ### `tests/`
 Les PDF de test sont générés à la volée avec reportlab : aucun binaire dans le dépôt, et chaque page porte un marqueur unique (`MARQUEUR-P007`) qui permet de vérifier qu'elle est rangée sous le bon numéro.
 
+### Version du nettoyage (ajoutée au module 2)
+
+`VERSION_NETTOYAGE`, dans `cleaning.py`, est incrémentée à chaque changement qui modifie le texte nettoyé ; chaque document enregistre la version qui l'a produit (`version_nettoyage`, champ ajouté au modèle de la section 4.2). Sans ce mécanisme, un fichier déjà importé garde son empreinte, il est vu comme un doublon, et ses pages restent nettoyées par l'ancien code : il fallait supprimer `store/` à la main. Désormais `rag ingest` retraite automatiquement un document nettoyé par une version antérieure, en gardant son `document_id`, et le signale comme « mis à jour ». Un registre écrit avant l'ajout du champ est lu comme version 1.
+
+| Version | Changement |
+|---|---|
+| 1 | Version initiale |
+| 2 | Titres : `## ## What's next` doublés et ancres `{#…}` retirées |
+| 3 | `glossary_tooltip` sans attribut `text` rendu par son `term_id` (40 mots manquaient, dont 2 titres vides) ; code placé dans `{{< tab codelang=… >}}` ou `{{< highlight … >}}` converti en vrai bloc de code (ses commentaires `# …` étaient lus comme des titres par le découpage) |
+
+Les défauts des versions 2 et 3 ont été trouvés en préparant le découpage : les titres devenant des citations (D3), chaque titre abîmé ou parasite devient une citation fausse.
+
+### Sections exclues du découpage (décision D7)
+
+Le nettoyage garde les sections « What's next » : elles font partie du texte du document. C'est le découpage qui les écarte, avec leurs sous-sections, selon la liste réglable `decoupage.sections_exclues`. Une telle section n'est qu'une liste de liens vers d'autres pages : indexée, elle ressemblerait à beaucoup de questions sans répondre à aucune. Le nombre de sections exclues est journalisé et affiché à chaque découpage ; au commit figé du corpus, 122 sections sont exclues. Détail dans [02-decoupage.md](02-decoupage.md) et [decisions.md](decisions.md).
+
 ## Exigences et tests
 
 | Exigence | Critère du cahier des charges | Test |
@@ -90,6 +106,7 @@ EF02 et EF05 parlent de « passages » ; ils n'existent pas encore, donc les tes
 
 - **Ligne de bord qui ne varie que par un nombre** : « Chapitre 3 — Installation » en haut de chaque page est retirée comme en-tête courant (voulu), mais une vraie ligne de contenu qui aurait cette forme sur la moitié des pages le serait aussi.
 - **Césure devant une minuscule** : `state-\nof-the-art` perd son premier tiret.
+- **`glossary_tooltip` sans attribut `text`** : rendu par son `term_id` (« pod », « service-account »), alors que Hugo affiche le nom du terme (« Pod », « ServiceAccount »). Approximation, faute d'avoir le glossaire.
 - **Shortcodes sans contenu disponible** : `code_sample` (fichier YAML externe), `glossary_definition` (définition stockée ailleurs) et les schémas Mermaid sont retirés. Les exemples YAML référencés ne sont donc pas interrogeables.
 - **Pages d'index de section** : 3 fichiers ne contiennent qu'un titre ou une phrase de renvoi. Ils sont importés ; le découpage décidera de les ignorer.
 - **Ordre de lecture PDF** : sur une mise en page en colonnes, pypdf peut mélanger les colonnes.

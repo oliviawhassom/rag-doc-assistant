@@ -258,6 +258,37 @@ def test_ancres_de_titre_retirees() -> None:
     assert "## {#dans-le-code}" in propre
 
 
+def test_glossary_tooltip_sans_text_rendu_par_term_id() -> None:
+    texte = (
+        'Un {{< glossary_tooltip term_id="pod" >}} et des '
+        '{{< glossary_tooltip text="nœuds" term_id="node" >}}.'
+    )
+    assert clean_hugo_markdown(texte) == "Un pod et des nœuds."
+
+
+def test_onglet_de_code_converti_en_bloc() -> None:
+    texte = (
+        '{{< tab name="Linux node" codelang="yaml" >}}\n---\n# Ce manifeste monte /data\n'
+        "kind: Pod\n{{< /tab >}}"
+    )
+    propre = clean_hugo_markdown(texte)
+    assert propre.strip() == "Linux node:\n```yaml\n---\n# Ce manifeste monte /data\nkind: Pod\n```"
+
+
+def test_onglet_de_prose_inchange_hormis_le_shortcode() -> None:
+    texte = '{{% tab name="Windows" %}}\nTexte de prose.\n{{% /tab %}}'
+    assert normalize_whitespace(clean_hugo_markdown(texte)) == "Windows:\nTexte de prose."
+
+
+def test_highlight_bloc_et_en_ligne() -> None:
+    bloc = '{{< highlight yaml "hl_lines=6" >}}\nkind: Pod\n# commentaire\n{{< /highlight >}}'
+    assert clean_hugo_markdown(bloc).strip() == "```yaml\nkind: Pod\n# commentaire\n```"
+    en_ligne = (
+        'La requête {{< highlight promql "hl_inline=true" >}}rate(x[5m]){{< /highlight >}} calcule.'
+    )
+    assert clean_hugo_markdown(en_ligne) == "La requête `rate(x[5m])` calcule."
+
+
 def test_markdown_ordinaire_inchange() -> None:
     texte = "# Titre\n\nUn paragraphe avec `code` et une liste :\n\n- a\n- b"
     assert clean_hugo_markdown(texte) == texte

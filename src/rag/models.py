@@ -3,10 +3,9 @@
 Les noms de champs reprennent exactement ceux du cahier des charges, pour que
 les fichiers produits (JSONL) et, plus tard, l'API parlent le même vocabulaire.
 
-Ce module contient pour l'instant ``Document`` et ``Page``. ``Page`` n'est pas
-dans le cahier des charges : c'est l'étape intermédiaire entre l'ingestion et le
-découpage. Le futur ``Passage`` (avec ``page_debut`` / ``page_fin``) sera
-construit à partir des pages.
+``Page`` n'est pas dans le cahier des charges : c'est l'étape intermédiaire
+entre l'ingestion (qui produit des pages) et le découpage (qui produit des
+``Passage`` à partir des pages).
 """
 
 from __future__ import annotations
@@ -30,6 +29,9 @@ class Document(BaseModel):
     empreinte: str = Field(pattern=r"^[0-9a-f]{64}$", description="SHA-256 du fichier")
     nb_pages: int = Field(ge=1)
     date_ingestion: datetime
+    # Hors cahier des charges : version du nettoyage qui a produit les pages
+    # (rag.ingestion.cleaning.VERSION_NETTOYAGE). Absent d'un ancien registre → 1.
+    version_nettoyage: int = 1
 
 
 class Page(BaseModel):
@@ -40,3 +42,28 @@ class Page(BaseModel):
     document_id: str
     page: int = Field(ge=1)
     texte: str
+
+
+class Passage(BaseModel):
+    """Extrait de document découpé pour la recherche (section 4.2).
+
+    ``titre_section`` est le chemin complet des titres, séparés par « > »
+    (décision D3) : « Imperative commands > Examples ». Il vaut ``None`` pour un
+    PDF ou un texte brut, où aucun titre n'est détecté ; la citation se fait alors
+    par la page. Pour un Markdown, ``page_debut`` = ``page_fin`` = 1.
+
+    ``texte`` est le contenu affiché et cité. Le texte effectivement encodé peut
+    être précédé du chemin de section (option ``contexte_section``) : voir
+    ``rag.chunking.texte_a_encoder``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    passage_id: str
+    document_id: str
+    page_debut: int = Field(ge=1)
+    page_fin: int = Field(ge=1)
+    titre_section: str | None
+    texte: str = Field(min_length=1)
+    nb_tokens: int = Field(ge=1)
+    config_decoupage: str

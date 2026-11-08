@@ -6,10 +6,19 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+import rag.cli
+from rag.chunking import TokenizerIndisponible
 from rag.cli import main
-from rag.config import load_config
+from rag.config import TokenizerConfig, load_config
+from tests.conftest import creer_tokenizer_factice
 
 RACINE = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(autouse=True)
+def tokenizer_factice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La commande charge le vrai tokenizer (téléchargement) : on le remplace ici."""
+    monkeypatch.setattr(rag.cli, "charger_tokenizer", lambda cfg: creer_tokenizer_factice())
 
 
 def _ecrire_config(tmp_path: Path, **ingestion: object) -> Path:
@@ -25,6 +34,9 @@ def test_config_par_defaut_du_depot_valide() -> None:
     cfg = load_config(RACINE / "configs" / "default.yaml")
     assert cfg.ingestion.taille_max_mo == 50
     assert cfg.ingestion.extensions_acceptees == (".pdf", ".txt", ".md")
+    assert cfg.decoupage.taille == 256
+    assert cfg.decoupage.sections_exclues == ("What's next",)
+    assert cfg.decoupage.contexte_section is True
 
 
 def test_cle_inconnue_refusee(tmp_path: Path) -> None:
@@ -94,3 +106,33 @@ def test_avertissement_affiche(tmp_path: Path, capsys: pytest.CaptureFixture[str
     sortie = capsys.readouterr().out
     assert "AVERTISSEMENT" in sortie and "restreint.pdf" in sortie
     assert "Importés : 1" in sortie
+
+
+def test_ingest_decoupe_et_affiche_le_resume(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text(
+        "# A\n\nIntro.\n\n## Usage\n\nTexte.\n\n## What's next\n\nLiens.", encoding="utf-8"
+    )
+    assert main(["ingest", str(corpus), "--config", str(_ecrire_config(tmp_path))]) == 0
+    sortie = capsys.readouterr().out
+    assert "Découpage taille_fixe-256-32-" in sortie
+    assert "2 passages" in sortie
+    assert "1 sections exclues (What's next : 1)" in sortie
+    assert list((tmp_path / "store" / "passages").iterdir())
+
+
+def test_tokenizer_indisponible_code_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def indisponible(cfg: TokenizerConfig) -> None:
+        raise TokenizerIndisponible("hors ligne")
+
+    monkeypatch.setattr(rag.cli, "charger_tokenizer", indisponible)
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("# A", encoding="utf-8")
+    assert main(["ingest", str(corpus), "--config", str(_ecrire_config(tmp_path))]) == 2
+    assert "Découpage impossible" in capsys.readouterr().err

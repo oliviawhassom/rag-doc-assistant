@@ -3,3 +3,5 @@ pypdf==6.17.0
 cryptography==50.0.1
 pydantic==2.13.5
 PyYAML==6.0.3
+tokenizers==0.23.3
+huggingface_hub==2.4.0

@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Literal
 
 from rag.config import Config
-from rag.ingestion.cleaning import clean_pages
+from rag.ingestion.cleaning import VERSION_NETTOYAGE, clean_pages
 from rag.ingestion.errors import EmptyFile, IngestionError, PdfWithoutText
 from rag.ingestion.extractors import extract_document
 from rag.ingestion.store import DocumentStore, document_id_from_hash
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 MANIFESTE = "manifest.jsonl"
 LICENCE_INCONNUE = "non renseignée"
 
-Statut = Literal["importe", "doublon", "rejete"]
+Statut = Literal["importe", "mis_a_jour", "doublon", "rejete"]
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def ingest_file(
         empreinte = sha256_file(chemin)
 
         existant = store.find_by_hash(empreinte)
-        if existant is not None:
+        if existant is not None and existant.version_nettoyage >= VERSION_NETTOYAGE:
             return IngestionResult(
                 chemin,
                 "doublon",
@@ -144,8 +144,27 @@ def ingest_file(
         empreinte=empreinte,
         nb_pages=len(pages),
         date_ingestion=datetime.now(UTC),
+        version_nettoyage=VERSION_NETTOYAGE,
     )
-    store.add(doc, [Page(document_id=document_id, page=i, texte=t) for i, t in enumerate(pages, 1)])
+    objets_pages = [Page(document_id=document_id, page=i, texte=t) for i, t in enumerate(pages, 1)]
+    if existant is not None:
+        # Même fichier, nettoyé par une version antérieure : on le retraite en
+        # gardant son identifiant (les références du jeu de test restent valides).
+        store.replace(doc, objets_pages)
+        logger.info(
+            "%s : nettoyage v%d → v%d, pages remplacées",
+            nom,
+            existant.version_nettoyage,
+            VERSION_NETTOYAGE,
+        )
+        return IngestionResult(
+            chemin,
+            "mis_a_jour",
+            f"Nettoyage v{existant.version_nettoyage} → v{VERSION_NETTOYAGE} : pages remplacées.",
+            document=doc,
+            avertissements=extraction.avertissements,
+        )
+    store.add(doc, objets_pages)
 
     for avertissement in extraction.avertissements:
         logger.warning("%s : %s", nom, avertissement)

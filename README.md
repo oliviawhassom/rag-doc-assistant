@@ -2,12 +2,13 @@
 
 Répond en langage naturel à des questions sur un corpus de documentation technique, cite le document et la page de chaque information, et s'abstient quand le corpus ne contient pas la réponse. La qualité est mesurée de façon reproductible.
 
-> **État : V1 en construction, module par module.** Seule l'ingestion (EF01–EF05) est livrée. Voir [docs/01-ingestion.md](docs/01-ingestion.md) et le [journal des décisions](docs/decisions.md).
+> **État : V1 en construction, module par module.** Ingestion (EF01–EF05) et découpage en passages (EF06–EF07) livrés. Voir [docs/01-ingestion.md](docs/01-ingestion.md), [docs/02-decoupage.md](docs/02-decoupage.md) et le [journal des décisions](docs/decisions.md).
 
 | Module | Exigences | État |
 |---|---|---|
 | Ingestion : import, extraction par page, nettoyage, doublons | EF01–EF05 | ✅ |
-| Découpage et indexation | EF06–EF09 | à faire |
+| Découpage en passages : sections, taille fixe ou par titres | EF06, EF07 | ✅ |
+| Embeddings et index | EF08, EF09 | à faire |
 | Recherche | EF11 | à faire |
 | Génération, citations, abstention | EF15–EF18, EF20, EF21 | à faire |
 | Évaluation | EF22, EF23, EF26 | à faire |
@@ -44,13 +45,19 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 # 1. Télécharger le corpus (documentation Kubernetes, CC BY 4.0, commit figé)
 python scripts/download_corpus.py
 
-# 2. Importer et nettoyer les documents
+# 2. Importer, nettoyer et découper les documents
 rag ingest data/corpus/kubernetes --config configs/default.yaml
 ```
 
 `python -m rag` est équivalent à `rag` et fonctionne même si le dossier des commandes Python n'est pas dans le PATH.
 
-Le résultat est écrit dans `store/` : `documents.jsonl` (un document par ligne) et `pages/<document_id>.jsonl` (le texte nettoyé de chaque page). Relancer la commande ne réimporte rien : les fichiers déjà connus sont signalés comme doublons.
+La commande importe les documents, puis découpe tout le corpus en passages selon la section `decoupage` de la configuration. Le résultat est écrit dans `store/` :
+- `documents.jsonl` et `pages/` : les documents et le texte nettoyé de chaque page ;
+- `passages/<configuration>/` : les passages et un `meta.json` avec les statistiques du découpage.
+
+Relancer la commande ne réimporte que ce qui a changé : les fichiers déjà connus sont comptés comme doublons, et ceux nettoyés par une ancienne version du nettoyage sont retraités.
+
+**Premier lancement** : le découpage télécharge le tokenizer de `BAAI/bge-m3` (environ 17 Mo, accès à huggingface.co nécessaire une fois). Un avertissement affiche alors la révision téléchargée : recopie-la dans `decoupage.tokenizer.revision` de `configs/default.yaml`, pour que le découpage soit reproductible.
 
 ## Vérifications
 
@@ -69,9 +76,10 @@ data/README.md              sources et licences du corpus
 scripts/download_corpus.py  téléchargement reproductible du corpus
 src/rag/
   config.py                 chargement et validation de la configuration
-  models.py                 Document, Page
+  models.py                 Document, Page, Passage
   cli.py                    commande « rag »
   ingestion/                validation, extraction, nettoyage, stockage
+  chunking/                 sections, découpage, tokenizer, stockage des passages
 tests/                      un test par critère d'acceptation
 docs/                       explications des choix, module par module
 ```
