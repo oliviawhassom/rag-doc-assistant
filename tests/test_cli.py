@@ -136,3 +136,26 @@ def test_tokenizer_indisponible_code_2(
     (corpus / "a.md").write_text("# A", encoding="utf-8")
     assert main(["ingest", str(corpus), "--config", str(_ecrire_config(tmp_path))]) == 2
     assert "Découpage impossible" in capsys.readouterr().err
+
+
+def test_document_mis_a_jour_affiche_lisiblement(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Le libellé « MIS À JOUR » ne doit pas être collé au chemin du fichier."""
+    import json
+
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("# A\n\nTexte.", encoding="utf-8")
+    config = str(_ecrire_config(tmp_path))
+    main(["ingest", str(corpus), "--config", config])
+    registre = tmp_path / "store" / "documents.jsonl"
+    entree = json.loads(registre.read_text(encoding="utf-8"))
+    entree["version_nettoyage"] = 1
+    registre.write_text(json.dumps(entree) + "\n", encoding="utf-8")
+    capsys.readouterr()
+
+    main(["ingest", str(corpus), "--config", config])
+    sortie = capsys.readouterr().out
+    assert f"MIS À JOUR {corpus / 'a.md'} : Nettoyage v1 → v" in sortie
+    assert "Mis à jour : 1" in sortie

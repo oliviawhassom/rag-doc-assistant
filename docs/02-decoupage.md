@@ -105,11 +105,20 @@ Les autres tests utilisent un vrai objet `tokenizers.Tokenizer` au vocabulaire v
 
 ## Sur le vrai corpus
 
-Mesures faites ici avec le tokenizer factice (un mot = un token). Les nombres de sections et d'exclusions ne dépendent pas du tokenizer ; les tailles, si.
-- **Sections** : 1 833 sections avec du contenu, 122 sections « What's next » exclues.
-- **Chemins** : aucun chemin ambigu, et aucun titre de niveau 1 parasite.
-- **Passages** : environ 2 300 à 256 « tokens », aucun au-dessus de la tolérance, et le plus petit fait 6 tokens.
-- **Sections plus longues que 256** : environ 22 % avec le tokenizer factice. Le vrai tokenizer découpe plus finement qu'un mot par token, donc la proportion réelle sera plus élevée. Elle s'affiche dans la ligne `Découpage …` de `rag ingest`.
+Mesuré sur Windows avec le vrai tokenizer XLM-RoBERTa (bge-m3, révision `5617a9f61b028005a4858fdac845db406aefb181`), configuration par défaut (taille fixe, 256 tokens, chevauchement 32) :
+
+| Mesure | Valeur |
+|---|---|
+| Documents | 166 |
+| Sections avec du contenu | 1 833 |
+| Sections plus longues que 256 tokens | 587, soit **32,0 %** |
+| Sections « What's next » exclues | 122 |
+| Passages | 2 657 |
+| Chemins ambigus | 0 |
+
+**Ce que signifient les 32,0 % (D5).** Pour 68 % des sections, les deux stratégies d'EF07 donnent exactement les mêmes passages, puisque ces sections tiennent dans 256 tokens. L'expérience « stratégie de découpage » ne peut montrer une différence que par les 32 % restants. Cette proportion diminuera quand la taille augmente : à 512 ou 1 024 tokens, moins de sections dépasseront la taille, et les deux stratégies se ressembleront encore davantage.
+
+Le tokenizer factice des tests (un mot = un token) donnait environ 22 % : le vrai découpe plus finement qu'un mot par token.
 
 Le découpage du corpus a fait trouver et corriger trois défauts du nettoyage du module 1 (version 3 du nettoyage, voir [01-ingestion.md](01-ingestion.md)), et une erreur dans ma vérification préliminaire des ambiguïtés (voir D3).
 

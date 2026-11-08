@@ -36,9 +36,9 @@ decoupage:
   tokenizer:
     # Tokenizer XLM-RoBERTa, partagé par bge-m3 et multilingual-e5 (D4).
     modele: BAAI/bge-m3
-    # Hash du commit Hugging Face. « main » = non figé : au premier lancement,
-    # la révision téléchargée est affichée ; la recopier ici (reproductibilité).
-    revision: main
+    # Hash du commit Hugging Face, figé pour la reproductibilité (relevé le
+    # 8 novembre 2026). « main » suivrait la dernière version, avec un avertissement.
+    revision: 5617a9f61b028005a4858fdac845db406aefb181
   sections_exclues:              # avec leurs sous-sections (D7)
     - "What's next"
   contexte_section: true         # chemin de section en tête du texte encodé (D5)

@@ -56,7 +56,8 @@ def _cmd_ingest(chemin: Path, chemin_config: Path, detaille: bool) -> int:
         if r.statut == "rejete":
             print(f"REJETÉ   {r.chemin} [{r.code_erreur}] {r.message}")
         elif r.statut == "mis_a_jour" or (r.statut == "doublon" and detaille):
-            print(f"{r.statut.upper():<9}{r.chemin} : {r.message}")
+            libelle = "MIS À JOUR" if r.statut == "mis_a_jour" else "DOUBLON"
+            print(f"{libelle:<11}{r.chemin} : {r.message}")
         for avertissement in r.avertissements:
             print(f"AVERTISSEMENT  {r.chemin} : {avertissement}")
 
