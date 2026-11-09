@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 # Les versions exactes sont figées dans requirements.txt (ENF07).
-dependencies = ["pypdf", "cryptography", "pydantic", "PyYAML", "tokenizers", "huggingface_hub"]
+dependencies = [
+    "pypdf", "cryptography", "pydantic", "PyYAML", "tokenizers", "huggingface_hub",
+    "numpy", "faiss-cpu", "torch", "sentence-transformers", "transformers",
+]
 
 [project.scripts]
 rag = "rag.cli:main"
@@ -20,7 +23,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=src/rag --cov-report=term-missing"
+addopts = "-q --cov=src/rag --cov-report=term-missing -m 'not slow'"
+markers = [
+    "slow: tests avec les vrais modèles d'embeddings (téléchargement, plusieurs secondes) ; lancer avec : python -m pytest -m slow",
+]
 
 [tool.ruff]
 line-length = 100
@@ -37,3 +43,8 @@ strict = true
 files = ["src"]
 plugins = ["pydantic.mypy"]
 
+
+[[tool.mypy.overrides]]
+# Importé à la demande, seulement pour encoder : peut manquer là où mypy tourne.
+module = ["sentence_transformers", "sentence_transformers.*"]
+ignore_missing_imports = true

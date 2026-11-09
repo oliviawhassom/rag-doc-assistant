@@ -29,7 +29,9 @@ Chaque décision indique ce qui a été tranché, pourquoi, et quels modules ell
 | **Recall@5 donné séparément pour chaque langue** | 5 (évaluation) | Critère d'acceptation d'EF20. |
 | La réponse est rédigée dans la langue de la question, les citations restent en anglais | 4 (génération) | EF20. |
 
-**Déjà fait.** `scripts/download_corpus.py` ne télécharge plus que l'anglais (166 fichiers).
+**Déjà fait.** `scripts/download_corpus.py` ne télécharge plus que l'anglais (166 fichiers). Le modèle par défaut, multilingual-e5-small, est multilingue (module 3).
+
+**Première observation (9 novembre 2026, module 3).** Avec e5-small, une question française qui contient un terme anglais (« … du cycle de vie des Pods ? ») peut être attirée par le passage consacré à ce terme plutôt que par celui qui répond (voir `docs/03-embeddings-index.md`). Le jeu de test devra donc contenir des questions françaises avec et sans terme anglais, pour que le Recall@5 français mesure cet effet.
 
 **À reporter dans le cahier des charges.** La nouvelle version reprend la décision (section 4.1, EF20) mais pas encore les deux premières conditions : le champ `langue` du modèle « Question de test » (section 4.2) et l'exigence d'un modèle d'embeddings multilingue (section 9.1, ligne « Modèles »).
 
@@ -53,7 +55,7 @@ Chaque décision indique ce qui a été tranché, pourquoi, et quels modules ell
 
 ## D4 — Tokenizer XLM-RoBERTa ; modèles multilingual-e5-small et bge-m3
 
-*8 novembre 2026 · EF06, EF08, section 7.4 · statut : **tokenizer appliqué** (module 2) ; modèles au module 3*
+*8 novembre 2026 · EF06, EF08, section 7.4 · statut : **appliquée** (modules 2 et 3) ; mesure de temps de bge-m3 à faire sur ton ordinateur*
 
 **Décision.** Un token est celui du tokenizer XLM-RoBERTa, que partagent les deux modèles retenus : `intfloat/multilingual-e5-small` (petit, limite 512 tokens) et `BAAI/bge-m3` (grand, limite 8 192 tokens). Une taille de passage désigne ainsi exactement le même texte pour les deux modèles.
 
@@ -61,13 +63,13 @@ Chaque décision indique ce qui a été tranché, pourquoi, et quels modules ell
 
 **Appliqué au module 2.** Les tailles sont comptées avec le tokenizer de bge-m3 (`decoupage.tokenizer`). Le comptage désactive la troncature intégrée au tokenizer, qui aurait compté trop court une longue section. Le texte compté est le contenu seul ; préfixes et chemin de section s'y ajoutent à l'encodage.
 
-**À appliquer au module 3.**
+**Appliqué au module 3.**
 
 | Point | Détail |
 |---|---|
-| Préfixes e5 | `query: ` pour les questions, `passage: ` pour les passages |
-| Temps sur CPU | Mesurer le temps d'indexation avec bge-m3 à 1 024 tokens ; s'il dépasse les 30 minutes d'ENF02, le documenter plutôt que le cacher |
-| Révisions | Hash du commit Hugging Face de chaque modèle dans la configuration et dans les rapports |
+| Préfixes e5 | `query: ` et `passage: `, réglables (`embeddings.prefixe_*`) ; `prompt=""` passé à sentence-transformers pour qu'il n'en ajoute pas un second |
+| Temps sur CPU | Durée et débit d'encodage dans `meta.json` et à l'écran ; configuration de mesure `configs/experiences/bge-m3-1024.yaml`. **Mesure à faire** sur ton ordinateur ; si elle dépasse les 30 minutes d'ENF02, elle sera documentée et non cachée |
+| Révisions | Hash du commit résolu dans `meta.json` de l'index et dans l'empreinte ; avertissement tant que la configuration dit `main`. Figée pour e5-small dans `configs/default.yaml` (`614241f…`) ; à figer pour bge-m3 après la mesure. Les rapports (module 5) la reprendront |
 
 **Révision du tokenizer.** Elle est relevée à chaque découpage et écrite dans `store/passages/<config>/meta.json`. Tant que `decoupage.tokenizer.revision` vaut `main`, un avertissement donne le hash à recopier dans la configuration.
 
@@ -101,3 +103,47 @@ Chaque décision indique ce qui a été tranché, pourquoi, et quels modules ell
 **Décision.** Une section « What's next » n'est qu'une liste de liens vers d'autres pages : elle ressemble à beaucoup de questions sans répondre à aucune. Elle est exclue du découpage, avec ses sous-sections. La liste des titres exclus est réglable (`decoupage.sections_exclues`) ; la comparaison ignore la casse et les variantes d'apostrophe.
 
 **Traçabilité.** Le nombre de sections exclues, par titre, est journalisé à chaque découpage, affiché par `rag ingest` et écrit dans `meta.json`. Au commit figé du corpus : 122 sections exclues.
+
+## D8 — Moteur d'encodage : sentence-transformers et torch en version CPU
+
+*8 novembre 2026 · EF08, ENF04 · statut : **appliquée** (module 3)*
+
+**Décision.** Les vecteurs sont calculés par sentence-transformers 6.2.0 sur torch 2.15.0 en version CPU. C'est l'implémentation de référence des deux modèles : chaque dépôt Hugging Face décrit son propre calcul du vecteur (moyenne pour e5, token initial pour bge-m3, puis normalisation), et c'est l'endroit où une erreur passerait inaperçue. Une réécriture en ONNX serait plus légère mais exposerait à cette erreur.
+
+**Versions figées** dans `requirements.txt` : torch, sentence-transformers, transformers, faiss-cpu, numpy. Sous Windows et macOS, le torch de PyPI est déjà la version CPU (127 Mo). Sous Linux, il tire CUDA (plusieurs Go) : l'intégration continue installera la version CPU depuis l'index de PyTorch.
+
+**Vérification.** L'encodeur factice des tests ne vérifie pas le calcul du vecteur. Un test `slow`, lancé sur ton ordinateur avec le vrai multilingual-e5-small, vérifie la norme des vecteurs et quatre paires évidentes (`tests/test_embeddings_reels.py`).
+
+## D9 — Index FAISS exact, ex æquo départagés par passage_id
+
+*8 novembre 2026 · EF09, EF11, ENF06 · statut : **appliquée** (module 3)*
+
+**Décision.** `IndexFlatIP` sur des vecteurs normalisés : similarité cosinus exacte, comparée à chaque passage. C'est instantané à cette échelle et cela donne les mêmes résultats à chaque exécution. Un index approximatif n'apporterait de la vitesse qu'au-delà de centaines de milliers de passages, au prix d'une variabilité qui fausserait les comparaisons de configurations. À score exactement égal, les passages sont départagés par `passage_id`, y compris au rang k.
+
+**Limite documentée.** Les vecteurs peuvent différer très légèrement d'une machine ou d'une version de torch à l'autre. ENF06 se vérifie donc sur une même machine ; les versions des bibliothèques sont enregistrées dans les métadonnées de l'index.
+
+## D10 — La recherche (EF11) fait partie du module 3
+
+*8 novembre 2026 · EF09, EF11 · statut : **appliquée** (module 3)*
+
+**Décision.** Le critère d'EF09 (l'index rechargé donne les mêmes résultats) suppose de pouvoir interroger l'index. La recherche (k paramétrable, un score par passage) est donc livrée avec l'index. `rag ask` affiche pour l'instant les passages retrouvés ; le module 4 y ajoutera la génération, les citations et l'abstention.
+
+## D11 — Longueur encodée contrôlée et signalée
+
+*8 novembre 2026 · EF06, EF08 · statut : **appliquée** (module 3)*
+
+**Décision.** La taille d'un passage (EF06) ne compte que son contenu. La longueur réellement encodée (préfixe, chemin de section, contenu, tokens spéciaux) est vérifiée à part, contre la limite du modèle. Les passages qui la dépasseraient, et que le modèle tronquerait, sont comptés, signalés à l'écran et listés dans les métadonnées de l'index.
+
+## D12 — Rechargement de l'index : empreinte complète
+
+*8 novembre 2026 · EF09 · statut : **appliquée** (module 3)*
+
+**Décision.** L'index est rechargé seulement si son empreinte est identique. L'empreinte couvre :
+
+- les passages, avec leur identifiant et leur texte exactement tel qu'il est encodé ;
+- le nom du modèle et sa révision résolue ;
+- toutes les options d'encodage : préfixes de requête et de passage, normalisation, chemin de section en tête.
+
+Une empreinte limitée aux passages, comme je l'avais d'abord proposé, aurait rechargé en silence un index périmé après un changement de modèle, de révision ou d'option : les passages restent identiques dans ce cas.
+
+**Garde-fous.** Changer une seule option force la reconstruction, et la raison est journalisée. `rag ask` refuse un index périmé. Un test par option vérifie que l'empreinte change et que l'index est reconstruit. Ces tests échouent bien si l'on retire une option de l'empreinte : vérifié en retirant volontairement le préfixe de requête.

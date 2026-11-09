@@ -100,6 +100,37 @@ class DecoupageConfig(_StrictModel):
         return f"{self.strategie}-{self.taille}-{self.chevauchement}-{empreinte}"
 
 
+class EmbeddingsConfig(_StrictModel):
+    """Modèle d'embeddings et options d'encodage (EF08, décisions D4, D8, D12).
+
+    Toutes ces options, sauf ``taille_lot``, entrent dans l'empreinte de l'index :
+    en changer une force la reconstruction. ``taille_lot`` ne règle que le
+    nombre de textes encodés à la fois.
+    """
+
+    modele: str = "intfloat/multilingual-e5-small"
+    # Hash du commit Hugging Face ; « main » accepté avec un avertissement.
+    revision: str = "main"
+    # e5 attend « query: » et « passage: » ; bge-m3 n'utilise pas de préfixe.
+    prefixe_requete: str = "query: "
+    prefixe_passage: str = "passage: "
+    # Vecteurs de norme 1 : le produit scalaire de l'index est alors le cosinus.
+    normaliser: bool = True
+    taille_lot: int = Field(default=32, ge=1, le=1024)
+
+    def options_encodage(self) -> dict[str, object]:
+        return {
+            "modele": self.modele,
+            "prefixe_requete": self.prefixe_requete,
+            "prefixe_passage": self.prefixe_passage,
+            "normaliser": self.normaliser,
+        }
+
+
+class RechercheConfig(_StrictModel):
+    k: int = Field(default=5, ge=1, le=100, description="nombre de passages renvoyés (EF11)")
+
+
 class StockageConfig(_StrictModel):
     dossier: Path = Path("store")
 
@@ -109,6 +140,8 @@ class Config(_StrictModel):
     stockage: StockageConfig = Field(default_factory=StockageConfig)
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
     decoupage: DecoupageConfig = Field(default_factory=DecoupageConfig)
+    embeddings: EmbeddingsConfig = Field(default_factory=EmbeddingsConfig)
+    recherche: RechercheConfig = Field(default_factory=RechercheConfig)
 
 
 def load_config(chemin: Path) -> Config:

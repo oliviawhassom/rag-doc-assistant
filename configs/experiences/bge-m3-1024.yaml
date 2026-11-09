@@ -1,0 +1,58 @@
+# Expérience D4 : temps d'indexation de bge-m3 à 1 024 tokens sur CPU (ENF02 : < 30 min).
+# Identique à configs/default.yaml, sauf : version, taille et chevauchement, modèle et préfixes.
+# Configuration d'exécution. Tous les réglages vivent ici, pas dans le code (ENF15).
+# Une clé inconnue fait échouer le chargement : une faute de frappe ne passe pas en silence.
+version: "exp-bge-m3-1024"
+
+stockage:
+  # Relatif au dossier depuis lequel la commande est lancée.
+  dossier: store
+
+ingestion:
+  extensions_acceptees: [".pdf", ".txt", ".md"]
+  taille_max_mo: 50              # 1 Mo = 1 048 576 octets
+  # En dessous de ce nombre moyen de caractères par page (après nettoyage),
+  # un PDF est considéré sans couche texte (numérisé) et rejeté.
+  min_caracteres_par_page: 20
+
+  nettoyage:
+    entetes_pieds: true          # retirer les lignes répétées en haut/bas de page (PDF)
+    lignes_bord: 2               # nb de lignes non vides examinées en haut et en bas de chaque page
+    seuil_repetition: 0.5        # part minimale des pages où la ligne doit revenir
+    min_pages_detection: 3       # en dessous, on ne cherche pas d'en-têtes répétés
+    cesures: true                # recoller « infor-\nmation » (PDF uniquement)
+    markdown_hugo: true          # nettoyer front matter et shortcodes Hugo (docs Kubernetes)
+    variables_hugo:              # valeurs des {{< skew … >}} / {{< param … >}}
+      currentVersion: "1.35"
+      latestVersion: "1.35"
+      currentPatchVersion: "1.35.0"
+      version: "v1.35"
+
+decoupage:
+  # « taille_fixe » : fenêtres de N tokens avec chevauchement.
+  # « titres » : paragraphes regroupés jusqu'à N tokens, coupes entre paragraphes.
+  # Dans les deux cas, un passage ne franchit jamais une frontière de section (D5).
+  strategie: taille_fixe
+  taille: 1024                   # en tokens
+  chevauchement: 128             # en tokens, taille fixe seulement
+  tokenizer:
+    # Tokenizer XLM-RoBERTa, partagé par bge-m3 et multilingual-e5 (D4).
+    modele: BAAI/bge-m3
+    # Hash du commit Hugging Face, figé pour la reproductibilité (relevé le
+    # 8 novembre 2026). « main » suivrait la dernière version, avec un avertissement.
+    revision: 5617a9f61b028005a4858fdac845db406aefb181
+  sections_exclues:              # avec leurs sous-sections (D7)
+    - "What's next"
+  contexte_section: true         # chemin de section en tête du texte encodé (D5)
+
+embeddings:
+  modele: BAAI/bge-m3            # 568 M de paramètres, limite de 8 192 tokens (D4)
+  revision: main                 # à figer après le premier lancement
+  # bge-m3 n'utilise pas de préfixe.
+  prefixe_requete: ""
+  prefixe_passage: ""
+  normaliser: true
+  taille_lot: 8                  # lots plus petits : passages longs, mémoire limitée
+
+recherche:
+  k: 5

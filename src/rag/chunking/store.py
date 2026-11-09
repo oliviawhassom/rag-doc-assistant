@@ -8,18 +8,17 @@ Un dossier par configuration : les expériences (256, 512, 1 024 tokens ; taille
 fixe ou par titres) coexistent sans s'écraser, et chaque passage porte le
 même identifiant de configuration que son dossier.
 
-L'écriture est faite dans un dossier temporaire, puis substituée d'un coup :
-un arrêt en cours de découpage ne laisse jamais un mélange d'ancien et de
-nouveau découpage.
+L'écriture est atomique (rag.fichiers) : un arrêt en cours de découpage ne
+laisse jamais un mélange d'ancien et de nouveau découpage.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 
+from rag.fichiers import ecrire_dossier_atomique
 from rag.models import Passage
 
 
@@ -31,28 +30,16 @@ class PassageStore:
         return (self.dossier / "meta.json").exists()
 
     def ecrire(self, par_document: dict[str, list[Passage]], meta: dict[str, Any]) -> None:
-        temporaire = self.dossier.with_name(self.dossier.name + ".tmp")
-        ancien = self.dossier.with_name(self.dossier.name + ".old")
-        for d in (temporaire, ancien):
-            if d.exists():
-                shutil.rmtree(d)
-        temporaire.mkdir(parents=True)
+        def remplir(dossier: Path) -> None:
+            for document_id, passages in par_document.items():
+                with (dossier / f"{document_id}.jsonl").open("w", encoding="utf-8") as f:
+                    for p in passages:
+                        f.write(p.model_dump_json() + "\n")
+            (dossier / "meta.json").write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
-        for document_id, passages in par_document.items():
-            with (temporaire / f"{document_id}.jsonl").open("w", encoding="utf-8") as f:
-                for p in passages:
-                    f.write(p.model_dump_json() + "\n")
-        (temporaire / "meta.json").write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
-        # Sous Windows, on ne peut pas renommer par-dessus un dossier existant :
-        # on écarte l'ancien, on met le nouveau en place, puis on supprime l'ancien.
-        if self.dossier.exists():
-            self.dossier.rename(ancien)
-        temporaire.rename(self.dossier)
-        if ancien.exists():
-            shutil.rmtree(ancien)
+        ecrire_dossier_atomique(self.dossier, remplir)
 
     def meta(self) -> dict[str, Any]:
         contenu: dict[str, Any] = json.loads(

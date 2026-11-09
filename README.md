@@ -2,14 +2,13 @@
 
 Répond en langage naturel à des questions sur un corpus de documentation technique, cite le document et la page de chaque information, et s'abstient quand le corpus ne contient pas la réponse. La qualité est mesurée de façon reproductible.
 
-> **État : V1 en construction, module par module.** Ingestion (EF01–EF05) et découpage en passages (EF06–EF07) livrés. Voir [docs/01-ingestion.md](docs/01-ingestion.md), [docs/02-decoupage.md](docs/02-decoupage.md) et le [journal des décisions](docs/decisions.md).
+> **État : V1 en construction, module par module.** Ingestion (EF01–EF05), découpage (EF06–EF07), embeddings, index et recherche (EF08, EF09, EF11) livrés. Voir `docs/` : [ingestion](docs/01-ingestion.md), [découpage](docs/02-decoupage.md), [embeddings et index](docs/03-embeddings-index.md), et le [journal des décisions](docs/decisions.md).
 
 | Module | Exigences | État |
 |---|---|---|
 | Ingestion : import, extraction par page, nettoyage, doublons | EF01–EF05 | ✅ |
 | Découpage en passages : sections, taille fixe ou par titres | EF06, EF07 | ✅ |
-| Embeddings et index | EF08, EF09 | à faire |
-| Recherche | EF11 | à faire |
+| Embeddings, index FAISS et recherche | EF08, EF09, EF11 | ✅ |
 | Génération, citations, abstention | EF15–EF18, EF20, EF21 | à faire |
 | Évaluation | EF22, EF23, EF26 | à faire |
 | Journalisation | EF27, EF28 | à faire |
@@ -45,8 +44,11 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 # 1. Télécharger le corpus (documentation Kubernetes, CC BY 4.0, commit figé)
 python scripts/download_corpus.py
 
-# 2. Importer, nettoyer et découper les documents
+# 2. Importer, nettoyer, découper et indexer les documents
 rag ingest data/corpus/kubernetes --config configs/default.yaml
+
+# 3. Rechercher les passages les plus proches d'une question
+rag ask "How do I create a Pod?" --config configs/default.yaml
 ```
 
 `python -m rag` est équivalent à `rag` et fonctionne même si le dossier des commandes Python n'est pas dans le PATH.
@@ -57,12 +59,15 @@ La commande importe les documents, puis découpe tout le corpus en passages selo
 
 Relancer la commande ne réimporte que ce qui a changé : les fichiers déjà connus sont comptés comme doublons, et ceux nettoyés par une ancienne version du nettoyage sont retraités.
 
-**Premier lancement** : le découpage télécharge le tokenizer de `BAAI/bge-m3` (environ 17 Mo, accès à huggingface.co nécessaire une fois). Un avertissement affiche alors la révision téléchargée : recopie-la dans `decoupage.tokenizer.revision` de `configs/default.yaml`, pour que le découpage soit reproductible.
+**Premier lancement** : il faut un accès à huggingface.co, une fois. Sont téléchargés le tokenizer de `BAAI/bge-m3` (environ 17 Mo) et le modèle `intfloat/multilingual-e5-small` (environ 470 Mo), aux révisions figées dans `configs/default.yaml`. Ensuite, le cache local suffit. Sur un ordinateur portable sans GPU, l'indexation du corpus prend environ 2 minutes.
+
+**Expériences** : `configs/experiences/` contient des configurations complètes qui ne diffèrent de la configuration par défaut que par les paramètres étudiés. Chaque configuration a ses propres passages et son propre index dans `store/`.
 
 ## Vérifications
 
 ```bash
-python -m pytest       # tests + couverture
+python -m pytest       # tests + couverture (sans les tests « slow »)
+python -m pytest -m slow   # tests avec le vrai modèle d'embeddings
 ruff check .
 ruff format --check .
 mypy
@@ -80,6 +85,7 @@ src/rag/
   cli.py                    commande « rag »
   ingestion/                validation, extraction, nettoyage, stockage
   chunking/                 sections, découpage, tokenizer, stockage des passages
+  index/                    encodeur, index FAISS, indexation, recherche
 tests/                      un test par critère d'acceptation
 docs/                       explications des choix, module par module
 ```

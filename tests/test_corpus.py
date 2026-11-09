@@ -64,3 +64,18 @@ def test_aucun_titre_ne_contient_de_residu_de_mise_en_forme() -> None:
 def test_sections_what_s_next_exclues() -> None:
     exclues = sum(s.exclue for f in FICHIERS for s in _sections(f))
     assert exclues >= 100  # ~120 au commit figé
+
+
+def test_toutes_les_cles_de_titre_hugo_ont_un_libelle() -> None:
+    """Une clé {{% heading "…" %}} inconnue donnerait un titre approximatif
+    (« Seealso » au lieu de « See also ») qui finirait dans les citations."""
+    import re
+
+    from rag.ingestion.cleaning import _TITRES_HUGO
+
+    cles = {
+        m
+        for f in FICHIERS
+        for m in re.findall(r'\{\{%\s*heading\s+"([^"]+)"', f.read_text(encoding="utf-8"))
+    }
+    assert cles <= _TITRES_HUGO.keys(), f"clés sans libellé : {cles - _TITRES_HUGO.keys()}"

@@ -2,6 +2,8 @@
 
 import random
 
+import pytest
+
 from rag.config import NettoyageConfig
 from rag.ingestion.cleaning import (
     clean_hugo_markdown,
@@ -238,6 +240,15 @@ def test_fin_de_lien_orpheline_retiree() -> None:
 def test_accolades_de_gabarit_conservees() -> None:
     """« {{username}} » n'est pas un shortcode Hugo (pas de < ni de %)."""
     assert clean_hugo_markdown("variables `{{username}}`") == "variables `{{username}}`"
+
+
+@pytest.mark.parametrize(
+    ("cle", "libelle"),
+    [("whatsnext", "What's next"), ("prerequisites", "Before you begin"), ("seealso", "See also")],
+)
+def test_titres_hugo_du_corpus(cle: str, libelle: str) -> None:
+    """Les trois clés présentes dans le corpus Kubernetes ont leur libellé officiel."""
+    assert clean_hugo_markdown(f'## {{{{% heading "{cle}" %}}}}') == f"## {libelle}"
 
 
 def test_titre_hugo_dans_une_ligne_de_titre_non_double() -> None:

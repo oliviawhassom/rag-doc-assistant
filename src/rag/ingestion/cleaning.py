@@ -37,7 +37,8 @@ from rag.ingestion.validation import Format
 #       glossary_tooltip sans attribut text rendu par son term_id
 #   3 — code placé dans {{< tab codelang=… >}} ou {{< highlight … >}} converti en
 #       bloc de code (ses commentaires « # … » étaient lus comme des titres)
-VERSION_NETTOYAGE = 3
+#   4 — titre {{% heading "seealso" %}} rendu « See also » (et non « Seealso »)
+VERSION_NETTOYAGE = 4
 
 # --------------------------------------------------------------------------- #
 # 1. Caractères
@@ -102,6 +103,7 @@ _TITRES_HUGO = {
     "cleanup": "Clean up",
     "synopsis": "Synopsis",
     "options": "Options",
+    "seealso": "See also",
 }
 
 

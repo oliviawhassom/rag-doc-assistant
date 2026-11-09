@@ -7,9 +7,12 @@ sait exactement ce que contient chaque page.
 
 from __future__ import annotations
 
+import hashlib
+import re
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.pdfencrypt import StandardEncryption
@@ -118,3 +121,44 @@ def tok() -> TokenizerTexte:
 def mots(n: int, prefixe: str = "m") -> str:
     """n mots distincts (donc n tokens pour le tokenizer factice)."""
     return " ".join(f"{prefixe}{i}" for i in range(n))
+
+
+class EncodeurFactice:
+    """Encodeur déterministe, sans modèle : chaque mot est haché vers une dimension.
+
+    Deux textes qui partagent des mots ont des vecteurs proches : les résultats
+    de recherche se vérifient à la main. Chaque appel est enregistré, pour
+    vérifier exactement ce qui est encodé (préfixes, chemin de section).
+    Ne vérifie PAS le calcul d'un vrai modèle : c'est le rôle des tests « slow ».
+    """
+
+    def __init__(
+        self,
+        revision: str = "f" * 40,
+        modele: str = "factice/encodeur",
+        dimension: int = 256,
+        longueur_max: int = 512,
+        normaliser: bool = True,
+    ) -> None:
+        self.modele = modele
+        self.revision = revision
+        self.dimension = dimension
+        self.longueur_max = longueur_max
+        self._normaliser = normaliser
+        self.appels: list[list[str]] = []
+
+    def encoder(self, textes: list[str], progression: bool = False) -> np.ndarray:
+        self.appels.append(list(textes))
+        vecteurs = np.zeros((len(textes), self.dimension), dtype=np.float32)
+        for i, texte in enumerate(textes):
+            for mot in re.findall(r"\w+", texte.lower()):
+                vecteurs[
+                    i, int(hashlib.sha256(mot.encode()).hexdigest()[:8], 16) % self.dimension
+                ] += 1
+        if self._normaliser:
+            normes = np.linalg.norm(vecteurs, axis=1, keepdims=True)
+            vecteurs = vecteurs / np.where(normes == 0, 1, normes)
+        return vecteurs.astype(np.float32)
+
+    def compter_tokens(self, texte: str) -> int:
+        return len(texte.split()) + 2  # + tokens spéciaux de début et de fin

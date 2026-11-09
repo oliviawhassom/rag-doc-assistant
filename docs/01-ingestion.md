@@ -77,6 +77,7 @@ Les PDF de test sont générés à la volée avec reportlab : aucun binaire dans
 | 1 | Version initiale |
 | 2 | Titres : `## ## What's next` doublés et ancres `{#…}` retirées |
 | 3 | `glossary_tooltip` sans attribut `text` rendu par son `term_id` (40 mots manquaient, dont 2 titres vides) ; code placé dans `{{< tab codelang=… >}}` ou `{{< highlight … >}}` converti en vrai bloc de code (ses commentaires `# …` étaient lus comme des titres par le découpage) |
+| 4 | Titre `{{% heading "seealso" %}}` rendu « See also » au lieu de « Seealso » (3 documents) |
 
 Les défauts des versions 2 et 3 ont été trouvés en préparant le découpage : les titres devenant des citations (D3), chaque titre abîmé ou parasite devient une citation fausse.
 

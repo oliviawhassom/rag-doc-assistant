@@ -42,3 +42,18 @@ decoupage:
   sections_exclues:              # avec leurs sous-sections (D7)
     - "What's next"
   contexte_section: true         # chemin de section en tête du texte encodé (D5)
+
+embeddings:
+  # Modèle petit et multilingue (D2, D4) ; bge-m3 dans configs/experiences/.
+  modele: intfloat/multilingual-e5-small
+  # Hash du commit Hugging Face, figé pour la reproductibilité (relevé le
+  # 9 novembre 2026). « main » suivrait la dernière version, avec un avertissement.
+  revision: 614241f622f53c4eeff9890bdc4f31cfecc418b3
+  # e5 attend ces préfixes ; sans eux, ses performances baissent (D4).
+  prefixe_requete: "query: "
+  prefixe_passage: "passage: "
+  normaliser: true               # norme 1 : le score de l'index est le cosinus
+  taille_lot: 32                 # textes encodés à la fois (n'entre pas dans l'empreinte)
+
+recherche:
+  k: 5                           # passages renvoyés (EF11)

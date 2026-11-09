@@ -5,3 +5,12 @@ pydantic==2.13.5
 PyYAML==6.0.3
 tokenizers==0.23.3
 huggingface_hub==2.4.0
+# Embeddings et index (module 3). torch : sous Windows et macOS, la version de PyPI
+# est déjà la version CPU. Sous Linux, elle tire CUDA (plusieurs Go) : installer
+# d'abord la version CPU, ce que fera l'intégration continue :
+#   pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+numpy==2.5.4
+faiss-cpu==1.15.1
+torch==2.15.0
+sentence-transformers==6.2.0
+transformers==5.22.2
