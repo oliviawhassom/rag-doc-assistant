@@ -147,3 +147,75 @@ Chaque décision indique ce qui a été tranché, pourquoi, et quels modules ell
 Une empreinte limitée aux passages, comme je l'avais d'abord proposé, aurait rechargé en silence un index périmé après un changement de modèle, de révision ou d'option : les passages restent identiques dans ce cas.
 
 **Garde-fous.** Changer une seule option force la reconstruction, et la raison est journalisée. `rag ask` refuse un index périmé. Un test par option vérifie que l'empreinte change et que l'index est reconstruit. Ces tests échouent bien si l'on retire une option de l'empreinte : vérifié en retirant volontairement le préfixe de requête.
+
+## D13 — LLM : Ollama local par défaut, fenêtre de contexte maîtrisée
+
+*9 novembre 2026 · EF15, ENF04, ENF11 · statut : **client appliqué** (module 4a) ; choix du modèle après mesure*
+
+**Décision.** Interface `Generateur` ; implémentation Ollama, locale, par défaut. Le fournisseur externe sera branché au module d'évaluation, pour le juge ; aucune clé d'API n'existe pour l'instant. Température 0 et graine fixe. Calcul sur processeur seul (`num_gpu: 0`, ENF04).
+
+**Fenêtre de contexte (tes ajouts).**
+
+- `num_ctx` est fixé dans la configuration : 16 384 tokens.
+- **Écart assumé avec ta demande** : Ollama n'offre pas d'endpoint pour compter les tokens, et retrouver le tokenizer Hugging Face de chaque modèle est fragile, certains dépôts étant soumis à licence. À la place :
+  - avant l'appel, une **borne garantie** : les octets du prompt majorent ses tokens, donc si `octets + marge + num_predict ≤ num_ctx`, la troncature est impossible ;
+  - après l'appel, le **compte exact** (`prompt_eval_count`, tokenizer du LLM) est relevé, et la réponse est rejetée s'il approche `num_ctx`.
+- L'**empreinte** des poids du modèle est lue dans Ollama et jointe à chaque réponse.
+- **Modèles « cloud » refusés en mode local.** Un Ollama local connecté à un compte relaie ces modèles vers les serveurs d'Ollama, alors que l'adresse reste `localhost`. Le contrôle de l'adresse ne suffit donc pas : l'étiquette du modèle et sa description par Ollama sont aussi vérifiées, avant tout envoi.
+- Le choix du modèle se fera sur la **latence et la qualité du français**, mesurées sur ton poste par `scripts/mesurer_llm.py`. Les candidats sont trois modèles de même taille : `gemma3:4b`, `qwen3.5:4b` et `granite4.2:3b`.
+
+## D14 — Citations par numéro, converties par le code
+
+*9 novembre 2026 · EF16 · statut : **lecture appliquée** (4a) ; conversion et vérification en 4b*
+
+**Décision.** Le LLM cite `[1]`, `[2]`… ; le code convertit ces numéros en `[fichier, section]` ou `[document, page]`. Un numéro se vérifie mécaniquement, alors que recopier des noms de fichiers est une source d'erreurs.
+
+**Précisions (tes ajouts), à appliquer en 4b.**
+
+- Vérification d'EF16 : chaque phrase porte au moins une citation. Les **blocs de code sont exclus** du découpage en phrases ; le paragraphe qui les introduit doit, lui, être cité.
+- Une **citation invalide** n'est pas supprimée en silence : elle est retirée de l'affichage, journalisée, et comptée dans une métrique « taux de citations invalides ».
+- **Périmètre** : la vérification contrôle qu'une citation existe, pas qu'elle dit vrai. Dire vrai relève de la fidélité, mesurée au module d'évaluation.
+
+## D15 — Abstention : deux règles, seuil calibré sur un jeu séparé
+
+*9 novembre 2026 · EF17, EF18 · statut : **marqueur appliqué** (4a) ; règles, calibration et messages en 4b*
+
+**Décision.**
+
+- **Première règle** : le score du meilleur passage est sous un seuil réglable. Elle s'applique avant tout appel au LLM.
+- **Seconde règle** : le modèle répond `INTROUVABLE_DANS_LES_PASSAGES`. La détection du marqueur est robuste aux variantes, et elle est testée.
+- **Journal** : la raison de l'abstention est enregistrée, avec la règle déclenchée, le score et le seuil.
+
+**Calibration (tes précisions).**
+
+- Les scores d'e5 sont resserrés, donc le seuil doit être calibré.
+- Il l'est sur un **jeu de calibration séparé** d'environ 30 questions. Ce jeu est écrit avant de regarder les résultats du jeu de test, avec la même répartition de types de questions.
+- **Le seuil retenu est celui de la calibration.** La courbe sur 5 seuils mesurée sur le jeu de test (section 7.4) sert à rendre compte, pas à choisir.
+
+**Messages (ta réponse à la question 2).** Messages fixes, stockés dans le code et jamais générés par le LLM : « Information introuvable dans le corpus » et « Information not found in the corpus », selon la langue détectée par le code. Si la détection est incertaine, la langue par défaut s'applique. Le champ `statut: abstention` reste le signal destiné aux programmes.
+
+## D16 — Prompts versionnés
+
+*9 novembre 2026 · EF21 · statut : **appliquée** (4a) ; journalisation en 4b*
+
+**Décision.** `prompts/<version>/systeme.txt` et `gabarit.txt`. Une version publiée ne se modifie jamais. La version et l'empreinte SHA-256 du prompt système et du gabarit accompagnent chaque prompt construit, et seront écrites dans le journal de chaque réponse.
+
+## D17 — Passages délimités et balises neutralisées
+
+*9 novembre 2026 · ENF08 · statut : **appliquée** (4a)*
+
+**Décision.** Les passages sont placés entre délimiteurs, et présentés au modèle comme des données, jamais comme des instructions.
+
+**Le piège que tu as signalé.** Un document qui contient `</passage>` pourrait sortir de la zone de données. Toute balise imitant nos délimiteurs est donc désamorcée dans les passages et dans la question, quelles que soient la casse, les espaces et les attributs. Le passage stocké et cité reste intact.
+
+**Tests.** Un document piège tente exactement cette évasion : test mécanique avec le faux serveur, et test `slow` avec le vrai LLM. Un second document dit « ignore tes instructions », ce qui est le critère d'ENF08.
+
+## D18 — Robustesse et journal
+
+*9 novembre 2026 · ENF10, ENF14 · statut : **pannes appliquées** (4a) ; limite de question, statut `erreur` et journal en 4b*
+
+**Décision.**
+
+- **Délai d'attente réglable** (`generation.delai_s`). Délai dépassé, Ollama arrêté, modèle absent ou réponse vide : erreur claire, aucune réponse inventée. En 4b, ces cas seront journalisés avec le statut `erreur`.
+- **Question limitée à 1 000 caractères** (ENF10), en 4b.
+- **Journal JSONL au format de la section 6.2**, en 4b. Il est minimal, et le module 6 le complétera.

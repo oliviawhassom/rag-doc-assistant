@@ -127,6 +127,48 @@ class EmbeddingsConfig(_StrictModel):
         }
 
 
+class GenerationConfig(_StrictModel):
+    """LLM qui rédige la réponse (EF15, décisions D13, D16, D18).
+
+    Les options d'Ollama sont toutes fixées explicitement : une valeur par
+    défaut d'Ollama peut changer d'une version à l'autre (``num_ctx`` en
+    particulier, qui tronque le prompt en silence s'il est trop petit).
+    """
+
+    fournisseur: Literal["ollama", "api"] = "ollama"
+    # ENF11 : en mode local, tout appel hors de cette machine est refusé.
+    mode_local: bool = True
+    modele: str = "gemma3:4b"
+    url: str = "http://localhost:11434"
+    num_ctx: int = Field(default=16384, ge=1024, description="fenêtre de contexte, en tokens")
+    num_predict: int = Field(default=512, ge=16, description="tokens générés au maximum")
+    # Marge pour le gabarit de conversation du modèle (balises de rôles), en tokens.
+    marge_gabarit: int = Field(default=256, ge=0)
+    temperature: float = Field(default=0.0, ge=0, le=2)
+    seed: int = 42
+    # ENF04 : 0 couche sur le GPU = calcul sur processeur seul.
+    num_gpu: int | None = 0
+    num_thread: int | None = None
+    # Mode « réflexion » des modèles qui en ont un : None = paramètre non envoyé.
+    reflexion: bool | None = None
+    delai_s: float = Field(default=120, gt=0, description="délai d'attente maximal du LLM")
+    version_prompt: str = "p1"
+    langue_defaut: Literal["fr", "en"] = "fr"
+
+    def options_ollama(self) -> dict[str, object]:
+        options: dict[str, object] = {
+            "num_ctx": self.num_ctx,
+            "num_predict": self.num_predict,
+            "temperature": self.temperature,
+            "seed": self.seed,
+        }
+        if self.num_gpu is not None:
+            options["num_gpu"] = self.num_gpu
+        if self.num_thread is not None:
+            options["num_thread"] = self.num_thread
+        return options
+
+
 class RechercheConfig(_StrictModel):
     k: int = Field(default=5, ge=1, le=100, description="nombre de passages renvoyés (EF11)")
 
@@ -142,6 +184,7 @@ class Config(_StrictModel):
     decoupage: DecoupageConfig = Field(default_factory=DecoupageConfig)
     embeddings: EmbeddingsConfig = Field(default_factory=EmbeddingsConfig)
     recherche: RechercheConfig = Field(default_factory=RechercheConfig)
+    generation: GenerationConfig = Field(default_factory=GenerationConfig)
 
 
 def load_config(chemin: Path) -> Config:

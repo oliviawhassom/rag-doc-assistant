@@ -56,3 +56,24 @@ embeddings:
 
 recherche:
   k: 5
+
+generation:
+  fournisseur: ollama            # « api » : prévu au module d'évaluation (juge), non branché
+  mode_local: true               # ENF11 : refuse tout envoi hors de cette machine
+  # Modèle PROVISOIRE : le choix définitif suivra la mesure sur ce poste
+  # (scripts/mesurer_llm.py), puis son empreinte sera relevée.
+  modele: gemma3:4b
+  url: http://localhost:11434
+  # Fixés explicitement : la valeur par défaut d'Ollama dépend de sa version, et un
+  # prompt plus long que num_ctx est tronqué en silence (D13).
+  num_ctx: 16384                 # tokens ; le pire prompt mesuré (k = 5) en demande ~10 800
+  num_predict: 512               # tokens générés au maximum
+  marge_gabarit: 256             # tokens réservés aux balises de rôles du modèle
+  temperature: 0.0               # déterminisme (ENF06)
+  seed: 42
+  num_gpu: 0                     # ENF04 : calcul sur processeur seul
+  num_thread: null               # null = choix d'Ollama
+  reflexion: null                # « think » ; false pour les modèles à réflexion (qwen3.5…)
+  delai_s: 120                   # au-delà : erreur claire, aucune réponse (ENF14)
+  version_prompt: p1             # prompts/p1/ (EF21)
+  langue_defaut: fr              # si la langue de la question est incertaine (EF20)

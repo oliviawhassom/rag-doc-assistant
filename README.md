@@ -2,14 +2,14 @@
 
 Répond en langage naturel à des questions sur un corpus de documentation technique, cite le document et la page de chaque information, et s'abstient quand le corpus ne contient pas la réponse. La qualité est mesurée de façon reproductible.
 
-> **État : V1 en construction, module par module.** Ingestion (EF01–EF05), découpage (EF06–EF07), embeddings, index et recherche (EF08, EF09, EF11) livrés. Voir `docs/` : [ingestion](docs/01-ingestion.md), [découpage](docs/02-decoupage.md), [embeddings et index](docs/03-embeddings-index.md), et le [journal des décisions](docs/decisions.md).
+> **État : V1 en construction, module par module.** Ingestion (EF01–EF05), découpage (EF06–EF07), embeddings, index et recherche (EF08, EF09, EF11) livrés ; génération en cours (4a : client LLM et mesure des modèles). Voir `docs/` : [ingestion](docs/01-ingestion.md), [découpage](docs/02-decoupage.md), [embeddings et index](docs/03-embeddings-index.md), [génération](docs/04-generation.md), et le [journal des décisions](docs/decisions.md).
 
 | Module | Exigences | État |
 |---|---|---|
 | Ingestion : import, extraction par page, nettoyage, doublons | EF01–EF05 | ✅ |
 | Découpage en passages : sections, taille fixe ou par titres | EF06, EF07 | ✅ |
 | Embeddings, index FAISS et recherche | EF08, EF09, EF11 | ✅ |
-| Génération, citations, abstention | EF15–EF18, EF20, EF21 | à faire |
+| Génération, citations, abstention | EF15–EF18, EF20, EF21 | en cours (4a livré) |
 | Évaluation | EF22, EF23, EF26 | à faire |
 | Journalisation | EF27, EF28 | à faire |
 
@@ -63,11 +63,24 @@ Relancer la commande ne réimporte que ce qui a changé : les fichiers déjà co
 
 **Expériences** : `configs/experiences/` contient des configurations complètes qui ne diffèrent de la configuration par défaut que par les paramètres étudiés. Chaque configuration a ses propres passages et son propre index dans `store/`.
 
+## Génération (en cours)
+
+Le LLM tourne en local avec [Ollama](https://ollama.com). Une fois Ollama installé, mesurer les modèles candidats sur ce poste :
+
+```bash
+ollama pull gemma3:4b
+ollama pull qwen3.5:4b
+ollama pull granite4.2:3b
+python scripts/mesurer_llm.py --modeles gemma3:4b qwen3.5:4b granite4.2:3b
+```
+
+Le rapport (latences, débit, langue, abstentions, citations, réponses complètes) est écrit dans `rapports/mesure-llm/`.
+
 ## Vérifications
 
 ```bash
 python -m pytest       # tests + couverture (sans les tests « slow »)
-python -m pytest -m slow   # tests avec le vrai modèle d'embeddings
+python -m pytest -m slow   # tests avec les vrais modèles (e5, et le LLM si Ollama est lancé)
 ruff check .
 ruff format --check .
 mypy
@@ -86,6 +99,9 @@ src/rag/
   ingestion/                validation, extraction, nettoyage, stockage
   chunking/                 sections, découpage, tokenizer, stockage des passages
   index/                    encodeur, index FAISS, indexation, recherche
+  generation/               prompts, client Ollama, langue, citations, abstention
+prompts/                    prompts versionnés (p1, …)
+rapports/                   mesures et rapports produits par les scripts
 tests/                      un test par critère d'acceptation
 docs/                       explications des choix, module par module
 ```

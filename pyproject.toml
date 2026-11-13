@@ -35,7 +35,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # caractères typographiques français (« », ’) voulus
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # caractères typographiques français (« », ’) voulus
+    "SIM905",  # listes de mots écrites en texte puis découpées : plus lisibles
+]
 
 [tool.mypy]
 python_version = "3.11"

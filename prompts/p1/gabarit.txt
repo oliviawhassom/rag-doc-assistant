@@ -1,0 +1,9 @@
+<passages>
+{passages}
+</passages>
+
+<question>
+{question}
+</question>
+
+Answer in {langue_reponse}, using only the passages above, and cite them by number.
